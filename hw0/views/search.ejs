@@ -26,8 +26,16 @@
     <nav class="navbar navbar-dark bg-dark">
         <span class="navbar-brand mb-0 h1">HW0</span>
     </nav>
+
+
+
     <div class="input">
         <div class="container">
+
+            <div class="message">
+                使用＃指令搜尋開頭為 input 的結果
+            </div>
+
             <form action="/search" method="get">
                 <div class="input-group mb-3">
                     <input id="input" type="text" name="search" class="form-control" placeholder="Search...."
@@ -37,8 +45,14 @@
                     </div>
                 </div>
             </form>
+            <div class="message">
+                一共有
+                <%=totalResultCount%> 筆資料
+            </div>
         </div>
     </div>
+
+
     <div class="container">
         <table class="table">
             <thead>
@@ -52,7 +66,10 @@
             <%for(let i=0;i<data.length;i++){%>
             <tr>
                 <th scope="row">
-                    <%= data[i].title %>
+                    <a href=<%=data[i].url %>>
+                        <%= data[i].title %>
+                    </a>
+
                 </th>
                 <td>
                     <%= data[i].url %>
@@ -67,7 +84,7 @@
         </table>
     </div>
 
-    <script src="./script.js"></script>
+
 </body>
 
 </html>

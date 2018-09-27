@@ -12,12 +12,12 @@ const size_t MIN_CHAR_LEN = 5;
 const size_t MAX_BUFFER_SIZE = 4096;
 
 const unsigned long MIN_CHINESE_CODE = 0x4E00;
-const unsigned long MAX_CHINESE_CODE = 0x9FD5;
+const unsigned long MAX_CHINESE_CODE = 0x9FFF;
 
 const int TRUE = 1;
 const int FALSE = 0;
 
-const WcharPtr tokens = L"。？！\n?!";
+const WcharPtr tokens = L"。！？!?\r\b\t\n";
 
 const CharPtr dir_name = "./files";
 const CharPtr output_file_name = "./data.txt";
@@ -153,27 +153,31 @@ void parseFiles(CharPtr files[])
             else
             {
                 /*---- Create data struct ----*/
-                DataPtr one_news = createOneNewsBuffer();
+                Data one_news;
                 /*---- Get URL ----*/
                 fgetws(buffer, MAX_BUFFER_SIZE, fp);
-                buffer[wcslen(buffer) - 1] = L'\0';
+                buffer[wcslen(buffer) - 1] = '\0';
 
-                one_news->url = createField(buffer);
+                one_news.url = createField(buffer);
                 /*---- Get Title ----*/
                 fgetws(buffer, MAX_BUFFER_SIZE, fp);
-                buffer[wcslen(buffer) - 1] = L'\0';
+                buffer[wcslen(buffer) - 1] = '\0';
 
-                one_news->title = createField(buffer);
+                one_news.title = createField(buffer);
                 /*---- Get Content ----*/
                 fgetws(buffer, MAX_BUFFER_SIZE, fp); //@B:
                 fgetws(buffer, MAX_BUFFER_SIZE, fp); // Content
-                one_news->sentence_count = splitSentence(&one_news->content, buffer);
-                total_sentence_cnt += one_news->sentence_count;
+                one_news.sentence_count = splitSentence(&one_news.content, buffer);
+                total_sentence_cnt += one_news.sentence_count;
 
-                outputOneNews(output_file, one_news);
+                outputOneNews(output_file, &one_news);
 
-                free(one_news);
-                one_news = NULL;
+                free(one_news.url);
+                free(one_news.title);
+                free(one_news.content);
+                one_news.url = NULL;
+                one_news.title = NULL;
+                one_news.content = NULL;
             }
         }
 
@@ -199,7 +203,7 @@ size_t splitSentence(WcharPtr **sentences, WcharPtr content)
     WcharPtr buffer = NULL;
 
     int chinese_char_cnt = 0;
-    size_t max_sentences = 64;
+    size_t max_sentences = 100;
     size_t sentence_cnt = 0;
 
     _sents = (WcharPtr *)malloc(sizeof(WcharPtr) * max_sentences);
@@ -222,6 +226,15 @@ size_t splitSentence(WcharPtr **sentences, WcharPtr content)
 
             if (chinese_char_cnt > MIN_CHAR_LEN) // A sentence must be longer than 5.
             {
+                if (sentence_cnt >= max_sentences)
+                {
+                    max_sentences *= 2;
+                    WcharPtr *temp = (WcharPtr *)malloc(sizeof(WcharPtr) * max_sentences);
+                    memcpy(temp, _sents, sizeof(WcharPtr) * sentence_cnt);
+                    free(_sents);
+                    _sents = temp;
+                    temp = NULL;
+                }
                 _sents[sentence_cnt] = (WcharPtr)malloc(sizeof(wchar_t) * wcslen(test) + 2);
                 if (_sents[sentence_cnt] == NULL)
                 {
@@ -262,7 +275,7 @@ int countChineseChar(WcharPtr test)
 {
     unsigned int chinese_char_cnt = 0;
 
-    while (test != NULL && *test != L'\0')
+    while (test != NULL && *test != '\0')
     {
         if (isChinese(*test) == TRUE)
         {
@@ -279,7 +292,7 @@ void outputOneNews(FILE *output_file, DataPtr data)
     size_t max_sent = data->sentence_count;
     for (size_t i = 0; i < max_sent; i++)
     {
-        fwprintf(output_file, L"%ls#%ls#%ls\n", data->content[i], data->title, data->url);
+        fwprintf(output_file, L"%ls\t%ls\t%ls\n", data->content[i], data->title, data->url);
     }
 }
 
