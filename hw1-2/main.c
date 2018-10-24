@@ -53,6 +53,7 @@ Parameter param = {false, false, false, NULL, NULL};
 
 char *command[] = {"-d", "-k", "-s"};
 const unsigned int MAX_COMMAND_COUNT = 3;
+const size_t MAX_BUFFER_SIZE = 1024;
 //-----------
 
 int main(int argc, char const *argv[])
@@ -161,7 +162,6 @@ size_t splitandSortFile(FILE *f_in)
     FILE **out_files = mallocFilesSpace(out_files_size);
 
     // read file
-    const size_t MAX_BUFFER_SIZE = 1024;
     size_t record_size = MAX_BUFFER_SIZE;
 
     size_t records_size = 1024;
@@ -204,10 +204,10 @@ size_t splitandSortFile(FILE *f_in)
             {
                 records_size = expandStringArraySpace(records_, records_cnt);
             }
-            records_[records_cnt++] = strdup(one_record);
-
+            // records_[records_cnt++] = strdup(one_record);
+            records_cnt = storeOneRecord(&records_, &one_record, records_cnt);
             record_size = MAX_BUFFER_SIZE;
-            resetStringSpace(&one_record, record_size);
+            // resetStringSpace(&one_record, record_size);
             current_one_record_size = 0;
 
             printf("-----------------\n");
@@ -252,6 +252,16 @@ char *findDPara(char *target, char *pattern)
     {
         return NULL;
     }
+}
+
+size_t storeOneRecord(char ***records, char **one_record, size_t index)
+{
+    char *temp = strdup(*one_record);
+    *records[index] = temp;
+
+    resetStringSpace(one_record, MAX_BUFFER_SIZE);
+
+    return index + 1;
 }
 
 /**====================
