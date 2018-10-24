@@ -36,9 +36,9 @@ char **mallocStringArraySpace(size_t size);
 
 FILE **mallocFilesSpace(size_t size);
 
-size_t expandStringSpace(char **str, size_t size);
+size_t expandStringSpace(char **str, size_t now_len, size_t max_size);
 
-size_t expandStringArraySpace(char ***str_array, size_t size);
+size_t expandStringArraySpace(char ***str_array, size_t now_len, size_t max_size);
 
 void resetStringSpace(char **str, size_t size);
 
@@ -61,8 +61,8 @@ size_t storeOneRecord(char ***records, char **one_record, size_t index);
 */
 Parameter param = {false, false, false, NULL, NULL};
 
-char *command[] = {"-d", "-k", "-s"};
-const unsigned int MAX_COMMAND_COUNT = 3;
+char *command[] = {"-d", "-k", "-s", "-m"};
+const unsigned int MAX_COMMAND_COUNT = 4;
 const size_t MAX_BUFFER_SIZE = 1024;
 //-----------
 
@@ -78,7 +78,7 @@ int main(int argc, char const *argv[])
     getCommand(argc, argv, fin_name);
 
     printf("d parameter:%s\n", param.d_para);
-    printf("d parameter len: %d\n", strlen(param.d_para));
+    printf("d parameter len: %ld\n", strlen(param.d_para));
 
     f_in = openFile(fin_name, "r");
     splitandSortFile(f_in);
@@ -136,6 +136,9 @@ void getCommand(int argc, char const **argv, char *file_name)
             case 2:
                 param.s = true;
                 break;
+            case 3:
+                param.limit_mem = strdup(argv[index + 1]);
+                break;
             }
         }
     }
@@ -158,13 +161,14 @@ void splitandSortFile(FILE *f_in)
 {
     // Memory
     int user_mem = atoi(param.limit_mem);
+    printf("user_mem %dM\n====================\n\n", user_mem);
     if (user_mem > 4096)
     {
         fprintf(stderr, "memory too large!!\n");
         exit(1);
     }
 
-    const size_t MAX_MEM_USE_SIZE = user_mem * 1024 * 1024;
+    unsigned long long int MAX_MEM_USE_SIZE = (unsigned long long int)user_mem * 1024 * 1024;
     size_t memory_use_size = 0;
 
     // out files
@@ -187,7 +191,6 @@ void splitandSortFile(FILE *f_in)
 
     while (fgets(buffer, MAX_BUFFER_SIZE, f_in) != NULL)
     {
-        printf("buffer%s", buffer);
         size_t buffer_len = strlen(buffer);
 
         char *d_ptr = NULL;
@@ -198,8 +201,8 @@ void splitandSortFile(FILE *f_in)
                 // sort records and write to file
                 // mem use -= len(one_record)
                 memory_use_size -= strlen(one_record);
-                records_size = MAX_BUFFER_SIZE;
                 resetStringArraySpace(&records_, records_size);
+                // records_size = MAX_BUFFER_SIZE;
             }
             // store word before d_para to one_record
             char *head = buffer;
@@ -210,20 +213,20 @@ void splitandSortFile(FILE *f_in)
                 current_one_record_size += pre_len;
                 memory_use_size += pre_len;
             }
-
             // start store records
             if (records_cnt >= records_size)
             {
-                records_size = expandStringArraySpace(&records_, records_cnt);
+                records_size = expandStringArraySpace(&records_, records_cnt, records_size);
             }
-            // records_[records_cnt++] = strdup(one_record);
-            records_cnt = storeOneRecord(&records_, &one_record, records_cnt);
-            record_size = MAX_BUFFER_SIZE;
-            // resetStringSpace(&one_record, record_size);
+
+            records_[records_cnt++] = strdup(one_record);
+            // record_size = MAX_BUFFER_SIZE;
+
+            resetStringSpace(&one_record, record_size);
             current_one_record_size = 0;
 
-            printf("-----------------\n");
             printf("%s\n", records_[records_cnt - 1]);
+            printf("-----------------\n");
 
             // store word after d_para to one record
             char *ptr = head + pre_len;
@@ -237,7 +240,7 @@ void splitandSortFile(FILE *f_in)
             // store one record
             if (current_one_record_size + buffer_len >= record_size)
             {
-                record_size = expandStringSpace(&one_record, record_size);
+                record_size = expandStringSpace(&one_record, current_one_record_size, record_size);
             }
 
             if (memory_use_size + buffer_len >= MAX_MEM_USE_SIZE)
@@ -266,15 +269,16 @@ char *findDPara(char *target, char *pattern)
     }
 }
 
-size_t storeOneRecord(char ***records, char **one_record, size_t index)
-{
-    char *temp = strdup(*one_record);
-    *records[index] = temp;
+// size_t storeOneRecord(char ***records, char **one_record, size_t index)
+// {
+//     char *temp = strdup(*one_record);
+//     printf("hhhhh\n");
+//     *records[index] = temp;
+//     printf("gggg\n");
+//     resetStringSpace(one_record, MAX_BUFFER_SIZE);
 
-    resetStringSpace(one_record, MAX_BUFFER_SIZE);
-
-    return index + 1;
-}
+//     return index + 1;
+// }
 
 /**====================
  *      Util
@@ -331,37 +335,44 @@ FILE **mallocFilesSpace(size_t size)
     return temp;
 }
 
-size_t expandStringSpace(char **str, size_t size)
+size_t expandStringSpace(char **str, size_t now_len, size_t max_size)
 {
-    size_t new_size = size * 2;
-    size_t len = strlen(*str);
+    printf("---- expand string! ----\n");
+    size_t new_max_size = max_size * 2;
 
-    char *temp = (char *)malloc(sizeof(char) * len + 1);
+    char *temp = (char *)malloc(sizeof(char) * new_max_size + 1);
     if (temp == NULL)
     {
         fprintf(stderr, "expand string space malloc error!\n");
         exit(1);
     }
 
-    memcpy(temp, *str, sizeof(char) * size);
-    free(*str);
+    memcpy(temp, *str, sizeof(char) * now_len);
+    if (*str != NULL)
+    {
+        free(*str);
+        *str = NULL;
+    }
     *str = temp;
     temp = NULL;
 
-    return new_size;
+    return new_max_size;
 }
 
-size_t expandStringArraySpace(char ***str_array, size_t size)
+size_t expandStringArraySpace(char ***str_array, size_t now_len, size_t max_size)
 {
-    size_t new_size = size * 2;
-    char **temp = (char **)malloc(sizeof(char *) * new_size + 1);
+    printf("---- expand string array! ----\n");
+    printf("aaaa %ld  bbb %ld\n", now_len, max_size);
+    size_t new_size = max_size * 2;
+
+    char **temp = (char **)malloc(sizeof(char *) * new_size + 2);
     if (temp == NULL)
     {
         fprintf(stderr, "expand string array malloc error!\n");
         exit(1);
     }
 
-    memcpy(temp, *str_array, size);
+    memcpy(temp, *str_array, sizeof(char *) * now_len);
     free(*str_array);
     *str_array = temp;
     temp = NULL;
@@ -371,22 +382,31 @@ size_t expandStringArraySpace(char ***str_array, size_t size)
 
 void resetStringSpace(char **str, size_t size)
 {
+    printf("---- reset string space ----\n");
     char *temp = NULL;
 
-    free(*str);
-    *str = NULL;
     temp = mallocStringSpace(size);
     temp[0] = '\0';
+    if (*str != NULL)
+    {
+        memset(*str, 0, strlen(*str));
+        free(*str);
+        *str = NULL;
+    }
     *str = temp;
     temp = NULL;
 }
 
 void resetStringArraySpace(char ***str_array, size_t size)
 {
-    char **temp = mallocStringArraySpace(size);
-    free(*str_array);
-    *str_array = NULL;
+    printf("---- reset string array space! ----\n");
 
-    *str_array = temp;
-    temp = NULL;
+    for (size_t i = 0; i < size; i++)
+    {
+        memset(*str_array[i], 0, strlen(*str_array[i]));
+        free(*str_array[i]);
+    }
+    str_array = NULL;
+
+    *str_array = mallocStringArraySpace(size);
 }
