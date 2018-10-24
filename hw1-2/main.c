@@ -34,17 +34,27 @@ char *mallocStringSpace(size_t size);
 
 char **mallocStringArraySpace(size_t size);
 
+FILE **mallocFilesSpace(size_t size);
+
 size_t expandStringSpace(char **str, size_t size);
 
-FILE **mallocFilesSpace(size_t size);
+size_t expandStringArraySpace(char ***str_array, size_t size);
+
+void resetStringSpace(char **str, size_t size);
+
+void resetStringArraySpace(char ***str_array, size_t size);
 //-------------------------------------------------
 
 void getCommand(int argc, char const **argv, char *fin_name);
 int findCommand(int argc, char const **argv, char *command);
 
-size_t splitandSortFile(FILE *f_in);
+void splitandSortFile(FILE *f_in);
+/**/
 
 char *findDPara(char *target, char *pattern);
+/**/
+
+size_t storeOneRecord(char ***records, char **one_record, size_t index);
 
 /**
  * Global Variable
@@ -60,7 +70,7 @@ int main(int argc, char const *argv[])
 {
     setlocale(LC_ALL, "");
 
-    char **records = NULL;
+    // char **records = NULL;
 
     FILE *f_in;
     char fin_name[30];
@@ -68,9 +78,10 @@ int main(int argc, char const *argv[])
     getCommand(argc, argv, fin_name);
 
     printf("d parameter:%s\n", param.d_para);
-    printf("d parameter len: %ld\n", strlen(param.d_para));
+    printf("d parameter len: %d\n", strlen(param.d_para));
 
     f_in = openFile(fin_name, "r");
+    splitandSortFile(f_in);
 
     return 0;
 }
@@ -143,7 +154,7 @@ int findCommand(int argc, char const **argv, char *command)
     return -1;
 }
 
-size_t splitandSortFile(FILE *f_in)
+void splitandSortFile(FILE *f_in)
 {
     // Memory
     int user_mem = atoi(param.limit_mem);
@@ -157,9 +168,9 @@ size_t splitandSortFile(FILE *f_in)
     size_t memory_use_size = 0;
 
     // out files
-    size_t out_files_size = 5;
-    size_t out_files_count = 0;
-    FILE **out_files = mallocFilesSpace(out_files_size);
+    // size_t out_files_size = 5;
+    // size_t out_files_count = 0;
+    // FILE **out_files = mallocFilesSpace(out_files_size);
 
     // read file
     size_t record_size = MAX_BUFFER_SIZE;
@@ -176,6 +187,7 @@ size_t splitandSortFile(FILE *f_in)
 
     while (fgets(buffer, MAX_BUFFER_SIZE, f_in) != NULL)
     {
+        printf("buffer%s", buffer);
         size_t buffer_len = strlen(buffer);
 
         char *d_ptr = NULL;
@@ -187,7 +199,7 @@ size_t splitandSortFile(FILE *f_in)
                 // mem use -= len(one_record)
                 memory_use_size -= strlen(one_record);
                 records_size = MAX_BUFFER_SIZE;
-                resetStringArraySpace(records_, records_size);
+                resetStringArraySpace(&records_, records_size);
             }
             // store word before d_para to one_record
             char *head = buffer;
@@ -202,7 +214,7 @@ size_t splitandSortFile(FILE *f_in)
             // start store records
             if (records_cnt >= records_size)
             {
-                records_size = expandStringArraySpace(records_, records_cnt);
+                records_size = expandStringArraySpace(&records_, records_cnt);
             }
             // records_[records_cnt++] = strdup(one_record);
             records_cnt = storeOneRecord(&records_, &one_record, records_cnt);
@@ -271,7 +283,7 @@ size_t storeOneRecord(char ***records, char **one_record, size_t index)
 FILE *openFile(char *file_name, char *mode)
 {
     FILE *f;
-    printf("Open File: %s\n----------------\n", file_name);
+    printf("Open File: %s\n\n", file_name);
 
     f = fopen(file_name, mode);
     if (f == NULL)
