@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <locale.h>
-#include <wchar.h>
 #include <time.h>
 
 typedef enum bool
@@ -11,6 +9,18 @@ typedef enum bool
     false,
     true
 } bool;
+
+typedef struct
+{
+    FILE **temp_files;
+    size_t temp_files_count;
+} FileDetail;
+
+typedef struct
+{
+    char *data;
+    int pos;
+} HeapElement;
 
 typedef struct
 {
@@ -46,13 +56,12 @@ size_t expandStringArraySpace(char ***str_array, size_t now_len, size_t max_size
 
 void resetStringSpace(char **str, size_t size);
 
-void resetStringArraySpace(char ***str_array, size_t size);
 //-------------------------------------------------
 
 void getCommand(int argc, char const **argv, char *fin_name);
 int findCommand(int argc, char const **argv, char *command);
 
-void splitandSortFile(FILE *f_in);
+void splitandSortFile(FILE *f_in, FileDetail *temp_files_detail);
 /**/
 
 char *findDPara(char *target, char *pattern);
@@ -68,16 +77,16 @@ Parameter param = {false, false, false, NULL, NULL};
 char *command[] = {"-d", "-k", "-s", "-m"};
 const unsigned int MAX_COMMAND_COUNT = 4;
 const size_t MAX_BUFFER_SIZE = 1024;
+char *final_file_name = "final_file.txt";
+char *temp_file_head = "temp_";
 //-----------
 
 int main(int argc, char const *argv[])
 {
-    setlocale(LC_ALL, "");
-
-    // char **records = NULL;
 
     FILE *f_in;
     char fin_name[30];
+    FileDetail temp_files_detail;
 
     getCommand(argc, argv, fin_name);
 
@@ -85,7 +94,13 @@ int main(int argc, char const *argv[])
     printf("d parameter len: %ld\n", strlen(param.d_para));
 
     f_in = openFile(fin_name, "r");
-    splitandSortFile(f_in);
+    printf("Start to split and sort temp files....\n\n");
+    splitandSortFile(f_in, &temp_files_detail);
+    fclose(f_in);
+    f_in = NULL;
+
+    // printf("Start to merge temp files.....\n\n")l
+    // mergeTempFiles(&temp_files_detail);
 
     return 0;
 }
@@ -161,7 +176,7 @@ int findCommand(int argc, char const **argv, char *command)
     return -1;
 }
 
-void splitandSortFile(FILE *f_in)
+void splitandSortFile(FILE *f_in, FileDetail *temp_files_detail)
 {
     // Memory
     int user_mem = (param.limit_mem == NULL) ? 4096 : atoi(param.limit_mem);
@@ -193,7 +208,7 @@ void splitandSortFile(FILE *f_in)
     char *one_record = mallocStringSpace(record_size);
     size_t current_one_record_size = 0;
     one_record[0] = '\0';
-    // FILE *test = fopen("test.txt", "w");
+    char temp_file_name[20];
 
     while (fgets(buffer, MAX_BUFFER_SIZE, f_in) != NULL)
     {
@@ -209,7 +224,8 @@ void splitandSortFile(FILE *f_in)
                 printf("mem not enough, create temp file\n");
                 qsort((void *)records_, records_cnt, sizeof(char *), cmp);
                 // FILE *tempfile = tmpfile();
-                FILE *tempfile = openFile("./bbb.txt", "w");
+                sprintf(temp_file_name, "temp_%ld.txt", out_files_count);
+                FILE *tempfile = openFile(temp_file_name, "w");
                 writeToFile(tempfile, records_, records_cnt);
 
                 for (size_t i = 0; i < records_cnt; i++)
@@ -217,14 +233,16 @@ void splitandSortFile(FILE *f_in)
                     memset(records_[i], 0, strlen(records_[i]));
                 }
 
+                memset(temp_file_name, 0, strlen(temp_file_name));
+
                 out_files[out_files_count] = tempfile;
+                tempfile = NULL;
                 out_files_count++;
 
                 memory_use_size = strlen(one_record);
                 printf("new mem size %ld\n", strlen(one_record));
 
                 records_cnt = 0;
-                // records_size = MAX_BUFFER_SIZE;
             }
             // store word before d_para to one_record
             char *head = buffer;
@@ -242,13 +260,9 @@ void splitandSortFile(FILE *f_in)
             }
 
             records_[records_cnt++] = strdup(one_record);
-            // record_size = MAX_BUFFER_SIZE;
 
             resetStringSpace(&one_record, record_size);
             current_one_record_size = 0;
-
-            // fprintf(test, "%s", records_[records_cnt - 1]);
-            // fprintf(test, "-----------------\n");
 
             // store word after d_para to one record
             char *ptr = head + pre_len;
@@ -272,7 +286,8 @@ void splitandSortFile(FILE *f_in)
                 printf("mem not enough, create temp file\n");
                 qsort((void *)records_, records_cnt, sizeof(char *), cmp);
                 // FILE *tempfile = tmpfile();
-                FILE *tempfile = openFile("./ccc.txt", "w");
+                sprintf(temp_file_name, "temp_%ld.txt", out_files_count);
+                FILE *tempfile = openFile(temp_file_name, "w");
                 writeToFile(tempfile, records_, records_cnt);
 
                 for (size_t i = 0; i < records_cnt; i++)
@@ -280,7 +295,10 @@ void splitandSortFile(FILE *f_in)
                     memset(records_[i], 0, strlen(records_[i]));
                 }
 
+                memset(temp_file_name, 0, strlen(temp_file_name));
+
                 out_files[out_files_count] = tempfile;
+                tempfile = NULL;
                 out_files_count++;
 
                 memory_use_size = strlen(one_record);
@@ -299,9 +317,12 @@ void splitandSortFile(FILE *f_in)
     qsort((void *)records_, records_cnt, sizeof(char *), cmp);
 
     // FILE *temp_file = tmpfile();
-    FILE *temp_file = openFile("aaa.txt", "w");
+    sprintf(temp_file_name, "temp_%ld.txt", out_files_count);
+    FILE *temp_file = openFile(temp_file_name, "w");
     writeToFile(temp_file, records_, records_cnt);
+
     out_files[out_files_count] = temp_file;
+    temp_file = NULL;
     out_files_count++;
 
     for (int i = 0; i < records_cnt; i++)
@@ -309,12 +330,56 @@ void splitandSortFile(FILE *f_in)
         free(records_[i]);
         records_[i] = NULL;
     }
+
+    memset(temp_file_name, 0, strlen(temp_file_name));
+
     free(records_);
     records_ = NULL;
     free(one_record);
     one_record = NULL;
     free(out_files);
     out_files = NULL;
+
+    temp_files_detail->temp_files_count = out_files_count;
+    temp_files_detail->temp_files = out_files;
+}
+
+void mergeTempFiles(FileDetail *file_detail)
+{
+    FILE *out_file = openFile(final_file_name, "w");
+
+    size_t K = file_detail->temp_files_count;
+    size_t temp_file_count = file_detail->temp_files_count;
+
+    FILE *tmp_files[temp_file_count];
+    char file_name[20];
+
+    char read_buffer[MAX_BUFFER_SIZE];
+
+    unsigned long long int memory_size = atoll(param.limit_mem) * 1024 * 1024;
+
+    // size_t max_line_size = (size_t)(memory_size / (long long int)temp_file_count);
+
+    // char ***files_buffer = (char **)malloc(sizeof(char **) * temp_file_count);
+    // if (files_buffer == NULL)
+    // {
+    //     fprintf(stderr, "merge buffer malloc error!\n");
+    //     exit(1);
+    // }
+
+    for (size_t i = 0; i < temp_file_count; i++)
+    {
+        // files_buffer[i] = mallocStringArraySpace(max_line_size);
+        sprintf(file_name, "temp_%ld.txt", i);
+        tmp_files[i] = openFile(file_name, "r");
+
+        while (fgets(read_buffer, MAX_BUFFER_SIZE, tmp_files[i] != NULL))
+        {
+        }
+    }
+
+    fclose(out_file);
+    out_file = NULL;
 }
 
 char *findDPara(char *target, char *pattern)
@@ -322,27 +387,7 @@ char *findDPara(char *target, char *pattern)
     char *ptr = strstr(target, pattern);
 
     return (ptr != NULL) ? ptr : NULL;
-
-    // if (ptr != NULL)
-    // {
-    //     return ptr;
-    // }
-    // else
-    // {
-    //     return NULL;
-    // }
 }
-
-// size_t storeOneRecord(char ***records, char **one_record, size_t index)
-// {
-//     char *temp = strdup(*one_record);
-//     printf("hhhhh\n");
-//     *records[index] = temp;
-//     printf("gggg\n");
-//     resetStringSpace(one_record, MAX_BUFFER_SIZE);
-
-//     return index + 1;
-// }
 
 void writeToFile(FILE *output_file, char **records, size_t count)
 {
@@ -502,35 +547,9 @@ void resetStringSpace(char **str, size_t size)
     // temp = NULL;
 }
 
-// void resetStringArraySpace(char ***str_array, size_t size)
-// {
-//     printf("---- reset string array space! ----\n");
-//     printf("size %ld\n", size);
-//     for (size_t i = 0; i < size; i++)
-//     {
-//         printf("kkkkkkk\n");
-
-//         if (*str_array[i][0] == '\0')
-//         {
-//             printf("fuck!\n");
-//         }
-//         printf("bbbbbbbb\n");
-//         // size_t len = strlen(*str_array[i]);
-//         printf("ccccc\n");
-//         // printf("%ld\n", len);
-//         printf("%s", *str_array[i]);
-
-//         // for (size_t j = 0; j < len; j++)
-//         // {
-//         //     printf("j %ld\n", j);
-//         //     printf("ssssssssss\n");
-//         //     *str_array[i][j] = '\0';
-//         //     printf("qqqq\n");
-//         // }
-//         // memset(*str_array[i], 0, strlen(*str_array[i]));
-//         // free(*str_array[i]);
-//     }
-//     // str_array = NULL;
-
-//     // *str_array = mallocStringArraySpace(size);
-// }
+void adjustHeap()
+{
+}
+void createHeap(size_t size)
+{
+}
